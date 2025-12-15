@@ -18,14 +18,14 @@ export async function getMedia(constraints: MediaStreamConstraints): Promise<Med
 }
 
 export async function getDisplayMedia(constraints: DisplayMediaStreamOptions = { video: true, audio: false }): Promise<MediaStream> {
-  // @ts-expect-error: Older types
-  if (navigator.mediaDevices.getDisplayMedia) {
-    // @ts-expect-error
-    return await navigator.mediaDevices.getDisplayMedia(constraints);
+  const navAny = navigator as any;
+  if (typeof navAny?.mediaDevices?.getDisplayMedia === "function") {
+    return await navAny.mediaDevices.getDisplayMedia(constraints);
   }
-  // Fallback for older Chromium (rare)
-  // @ts-expect-error
-  return await (navigator.mediaDevices as any).getDisplayMedia(constraints);
+  if (typeof navAny?.getDisplayMedia === "function") {
+    return await navAny.getDisplayMedia(constraints);
+  }
+  throw new Error("getDisplayMedia is not supported in this browser");
 }
 
 export function replaceTrackOnSender(peer: RTCPeerConnection, newTrack: MediaStreamTrack, kind: "video" | "audio") {
@@ -63,10 +63,11 @@ export function createMixedStreamForRecording(options: {
   const canvas = document.createElement("canvas");
   canvas.width = canvasWidth;
   canvas.height = canvasHeight;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
+  const ctxMaybe = canvas.getContext("2d");
+  if (!ctxMaybe) {
     throw new Error("Canvas 2D context not available");
   }
+  const ctx: CanvasRenderingContext2D = ctxMaybe;
 
   let stopped = false;
   function draw() {
