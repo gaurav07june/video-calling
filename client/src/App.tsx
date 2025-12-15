@@ -5,7 +5,8 @@ import { createMixedStreamForRecording, createPeerConnection, fetchIceConfig, ge
 
 type ConnectionState = "idle" | "joining" | "joined" | "calling";
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:8080";
+// Normalize server URL (strip trailing slashes). Ensure you set HTTPS in Vercel env.
+const SERVER_URL = (import.meta.env.VITE_SERVER_URL || "http://localhost:8080").replace(/\/+$/, "");
 
 export default function App() {
   const [displayName, setDisplayName] = useState<string>("");
@@ -38,8 +39,8 @@ export default function App() {
         const cfg = await fetchIceConfig(SERVER_URL);
         iceConfigRef.current = cfg;
       } catch (e) {
-        console.error(e);
-        setMessage("Failed to fetch ICE configuration");
+        console.error("Failed to fetch ICE configuration from:", `${SERVER_URL}/config`, e);
+        setMessage(`Failed to fetch ICE configuration from ${SERVER_URL}/config`);
       }
     })();
   }, []);
