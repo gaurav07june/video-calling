@@ -5,7 +5,7 @@ import { createMixedStreamForRecording, createPeerConnection, fetchIceConfig, ge
 
 type ConnectionState = "idle" | "joining" | "joined" | "calling";
 
-// Normalize server URL (strip trailing slashes). Ensure you set HTTPS in Vercel env.
+// Normalize server URL (strip trailing slashes).
 const SERVER_URL = (import.meta.env.VITE_SERVER_URL || "http://localhost:8080").replace(/\/+$/, "");
 
 export default function App() {
