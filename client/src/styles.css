@@ -87,4 +87,30 @@ video {
   border-color: transparent;
 }
 
+/* Responsive */
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .controls {
+    flex-wrap: wrap;
+  }
+  .controls > * {
+    flex: 1 1 48%;
+  }
+  .controls .danger {
+    flex-basis: 100%;
+  }
+  .join-form {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 16px;
+  }
+  .join-form input,
+  .join-form button {
+    width: 100%;
+  }
+}
+
 

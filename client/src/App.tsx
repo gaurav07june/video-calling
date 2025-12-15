@@ -283,7 +283,7 @@ export default function App() {
       </div>
 
       {state === "idle" || state === "joining" ? (
-        <div style={{ padding: 16, display: "flex", gap: 8, alignItems: "center" }}>
+        <div className="join-form">
           <input
             placeholder="Your name"
             value={displayName}
