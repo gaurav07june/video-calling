@@ -13,7 +13,11 @@ const app = express();
 const server = http.createServer(app);
 
 const PORT = Number(process.env.PORT || 8080);
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
+const RAW_CORS_ORIGIN = (process.env.CORS_ORIGIN || "*").trim();
+const CORS_ORIGIN: string | string[] =
+  RAW_CORS_ORIGIN.includes(",")
+    ? RAW_CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean)
+    : RAW_CORS_ORIGIN;
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
 
 const io = new SocketIOServer(server, {
