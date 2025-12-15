@@ -44,6 +44,13 @@ export default function App() {
     })();
   }, []);
 
+  // Ensure local preview attaches after the <video> mounts (joined/calling views)
+  useEffect(() => {
+    if ((state === "joined" || state === "calling") && localVideoRef.current && localStreamRef.current) {
+      localVideoRef.current.srcObject = localStreamRef.current;
+    }
+  }, [state]);
+
   const initLocalMedia = useCallback(async () => {
     const stream = await getMedia({ audio: true, video: { width: 1280, height: 720 } });
     localStreamRef.current = stream;
