@@ -30,6 +30,44 @@ const io = new SocketIOServer(server, {
 app.use(cors({ origin: CORS_ORIGIN, credentials: true }));
 app.use(express.json());
 
+// Optional Xirsys TURN integration (dynamic ICE fetch)
+const XIRSYS_API_PATH = (process.env.XIRSYS_API_PATH || "https://global.xirsys.net").replace(/\/+$/, "");
+const XIRSYS_IDENT = process.env.XIRSYS_IDENT || "";
+const XIRSYS_SECRET = process.env.XIRSYS_SECRET || "";
+const XIRSYS_CHANNEL = process.env.XIRSYS_CHANNEL || "";
+const XIRSYS_TTL_SECONDS = Number(process.env.XIRSYS_TTL_SECONDS || 600);
+
+type IceServer = { urls: string | string[]; username?: string; credential?: string };
+let xirsysCache: { iceServers: IceServer[]; fetchedAt: number } | null = null;
+
+async function fetchXirsysIceServers(): Promise<IceServer[] | null> {
+  if (!XIRSYS_IDENT || !XIRSYS_SECRET || !XIRSYS_CHANNEL) return null;
+  const now = Date.now();
+  if (xirsysCache && now - xirsysCache.fetchedAt < XIRSYS_TTL_SECONDS * 1000) {
+    return xirsysCache.iceServers;
+  }
+  const endpoint = `${XIRSYS_API_PATH}/_turn/${encodeURIComponent(XIRSYS_CHANNEL)}?format=urls`;
+  const auth = Buffer.from(`${XIRSYS_IDENT}:${XIRSYS_SECRET}`).toString("base64");
+  try {
+    const res = await fetch(endpoint, { method: "PUT", headers: { Authorization: `Basic ${auth}` } });
+    if (!res.ok) {
+      // eslint-disable-next-line no-console
+      console.error("Xirsys fetch failed:", res.status, await res.text());
+      return null;
+    }
+    const data = await res.json() as any;
+    const iceServers: IceServer[] | undefined = data?.v?.iceServers;
+    if (iceServers && Array.isArray(iceServers) && iceServers.length > 0) {
+      xirsysCache = { iceServers, fetchedAt: now };
+      return iceServers;
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Xirsys fetch error:", err);
+  }
+  return null;
+}
+
 // Ensure recordings directory
 const recordingsDir = path.join(process.cwd(), "recordings");
 if (!fs.existsSync(recordingsDir)) {
@@ -45,26 +83,33 @@ app.get("/health", (_req: Request, res: Response) => {
 });
 
 // ICE config
-app.get("/config", (_req: Request, res: Response) => {
+app.get("/config", async (_req: Request, res: Response) => {
   const stunUrls = (process.env.ICE_STUN_URLS || "stun:stun.l.google.com:19302")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const iceServers: Array<Record<string, unknown>> = [];
+  // Build base list with configured STUN
+  const iceServers: IceServer[] = [];
   if (stunUrls.length > 0) {
     iceServers.push({ urls: stunUrls });
   }
 
-  const turnUrl = process.env.TURN_URL?.trim();
-  const turnUsername = process.env.TURN_USERNAME?.trim();
-  const turnPassword = process.env.TURN_PASSWORD?.trim();
-  if (turnUrl && turnUsername && turnPassword) {
-    iceServers.push({
-      urls: turnUrl,
-      username: turnUsername,
-      credential: turnPassword
-    });
+  // Prefer dynamic TURN from Xirsys if configured; else use static TURN env
+  const xirsysServers = await fetchXirsysIceServers();
+  if (xirsysServers && xirsysServers.length > 0) {
+    iceServers.push(...xirsysServers);
+  } else {
+    const turnUrl = process.env.TURN_URL?.trim();
+    const turnUsername = process.env.TURN_USERNAME?.trim();
+    const turnPassword = process.env.TURN_PASSWORD?.trim();
+    if (turnUrl && turnUsername && turnPassword) {
+      iceServers.push({
+        urls: turnUrl,
+        username: turnUsername,
+        credential: turnPassword
+      });
+    }
   }
 
   res.json({ iceServers, publicBaseUrl: PUBLIC_BASE_URL });
