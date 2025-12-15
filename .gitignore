@@ -137,3 +137,42 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# macOS / Windows OS junk
+.DS_Store
+Thumbs.db
+
+# Editor folders
+.vscode/
+.idea/
+.fleet/
+
+# direnv
+.direnv
+.envrc
+
+# Vite cache directories
+**/.vite/
+
+# Vitest cache
+.vitest/
+
+# E2E testing artifacts
+playwright-report/
+test-results/
+cypress/screenshots/
+cypress/videos/
+.cypress-cache/
+
+# Generic build output
+build/
+
+# pnpm store
+.pnpm-store/
+
+# Keys and certs (keep examples under version control separately)
+*.pem
+*.key
+
+# Project-specific: recorded media
+server/recordings/
