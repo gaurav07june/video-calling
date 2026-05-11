@@ -13,6 +13,7 @@ const app = express();
 const server = http.createServer(app);
 
 const PORT = Number(process.env.PORT || 8080);
+const MAX_PARTICIPANTS = Number(process.env.MAX_PARTICIPANTS || 8);
 const RAW_CORS_ORIGIN = (process.env.CORS_ORIGIN || "*").trim();
 const CORS_ORIGIN: string | string[] =
   RAW_CORS_ORIGIN.includes(",")
@@ -51,7 +52,6 @@ async function fetchXirsysIceServers(): Promise<IceServer[] | null> {
   try {
     const res = await fetch(endpoint, { method: "PUT", headers: { Authorization: `Basic ${auth}` } });
     if (!res.ok) {
-      // eslint-disable-next-line no-console
       console.error("Xirsys fetch failed:", res.status, await res.text());
       return null;
     }
@@ -62,40 +62,32 @@ async function fetchXirsysIceServers(): Promise<IceServer[] | null> {
       return iceServers;
     }
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error("Xirsys fetch error:", err);
   }
   return null;
 }
 
-// Ensure recordings directory
 const recordingsDir = path.join(process.cwd(), "recordings");
 if (!fs.existsSync(recordingsDir)) {
   fs.mkdirSync(recordingsDir, { recursive: true });
 }
-
-// Static serving for recordings
 app.use("/recordings", express.static(recordingsDir));
 
-// Health endpoint
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-// ICE config
 app.get("/config", async (_req: Request, res: Response) => {
   const stunUrls = (process.env.ICE_STUN_URLS || "stun:stun.l.google.com:19302")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 
-  // Build base list with configured STUN
   const iceServers: IceServer[] = [];
   if (stunUrls.length > 0) {
     iceServers.push({ urls: stunUrls });
   }
 
-  // Prefer dynamic TURN from Xirsys if configured; else use static TURN env
   const xirsysServers = await fetchXirsysIceServers();
   if (xirsysServers && xirsysServers.length > 0) {
     iceServers.push(...xirsysServers);
@@ -115,7 +107,6 @@ app.get("/config", async (_req: Request, res: Response) => {
   res.json({ iceServers, publicBaseUrl: PUBLIC_BASE_URL });
 });
 
-// Recording upload
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, recordingsDir);
@@ -152,7 +143,7 @@ io.on("connection", (socket: Socket) => {
       return;
     }
     const participants = roomIdToParticipants.get(roomId) || new Map<string, DisplayName>();
-    if (participants.size >= 2) {
+    if (participants.size >= MAX_PARTICIPANTS) {
       socket.emit("room_full", { roomId });
       return;
     }
@@ -175,19 +166,20 @@ io.on("connection", (socket: Socket) => {
     });
   });
 
-  socket.on("offer", ({ roomId, sdp }: { roomId: string; sdp: RTCSessionDescriptionInit }) => {
-    if (!roomId) return;
-    socket.to(roomId).emit("offer", { from: socket.id, sdp });
+  // Targeted signaling: route to a specific peer by socketId
+  socket.on("offer", ({ to, sdp }: { to: string; sdp: RTCSessionDescriptionInit }) => {
+    if (!to) return;
+    io.to(to).emit("offer", { from: socket.id, sdp });
   });
 
-  socket.on("answer", ({ roomId, sdp }: { roomId: string; sdp: RTCSessionDescriptionInit }) => {
-    if (!roomId) return;
-    socket.to(roomId).emit("answer", { from: socket.id, sdp });
+  socket.on("answer", ({ to, sdp }: { to: string; sdp: RTCSessionDescriptionInit }) => {
+    if (!to) return;
+    io.to(to).emit("answer", { from: socket.id, sdp });
   });
 
-  socket.on("ice_candidate", ({ roomId, candidate }: { roomId: string; candidate: RTCIceCandidateInit }) => {
-    if (!roomId) return;
-    socket.to(roomId).emit("ice_candidate", { from: socket.id, candidate });
+  socket.on("ice_candidate", ({ to, candidate }: { to: string; candidate: RTCIceCandidateInit }) => {
+    if (!to) return;
+    io.to(to).emit("ice_candidate", { from: socket.id, candidate });
   });
 
   socket.on("leave_room", ({ roomId }: { roomId: string }) => {
@@ -212,8 +204,5 @@ io.on("connection", (socket: Socket) => {
 });
 
 server.listen(PORT, () => {
-  // eslint-disable-next-line no-console
   console.log(`Signaling server listening on ${PORT}`);
 });
-
-

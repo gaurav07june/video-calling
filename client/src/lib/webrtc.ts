@@ -33,7 +33,6 @@ export function replaceTrackOnSender(peer: RTCPeerConnection, newTrack: MediaStr
   if (sender) {
     sender.replaceTrack(newTrack);
   } else {
-    // Fallback: add track (should not happen in 1:1 flow if added initially)
     peer.addTrack(newTrack);
   }
 }
@@ -43,22 +42,22 @@ export type MixedStream = {
   stop: () => void;
 };
 
+function computeGrid(n: number): { cols: number; rows: number } {
+  if (n <= 1) return { cols: 1, rows: 1 };
+  if (n === 2) return { cols: 2, rows: 1 };
+  if (n <= 4) return { cols: 2, rows: 2 };
+  if (n <= 6) return { cols: 3, rows: 2 };
+  if (n <= 9) return { cols: 3, rows: 3 };
+  return { cols: 4, rows: Math.ceil(n / 4) };
+}
+
 export function createMixedStreamForRecording(options: {
-  localVideo: HTMLVideoElement;
-  remoteVideo: HTMLVideoElement;
+  videos: HTMLVideoElement[];
+  audioStreams: Array<MediaStream | null | undefined>;
   canvasWidth?: number;
   canvasHeight?: number;
-  localAudioStream?: MediaStream | null;
-  remoteAudioStream?: MediaStream | null;
 }): MixedStream {
-  const {
-    localVideo,
-    remoteVideo,
-    canvasWidth = 1280,
-    canvasHeight = 720,
-    localAudioStream,
-    remoteAudioStream
-  } = options;
+  const { videos, audioStreams, canvasWidth = 1280, canvasHeight = 720 } = options;
 
   const canvas = document.createElement("canvas");
   canvas.width = canvasWidth;
@@ -74,18 +73,23 @@ export function createMixedStreamForRecording(options: {
     if (stopped) return;
     ctx.fillStyle = "black";
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-    // Side-by-side layout
-    const w = canvasWidth / 2;
-    const h = canvasHeight;
-    try {
-      if (localVideo.readyState >= 2) {
-        ctx.drawImage(localVideo, 0, 0, w, h);
+    const n = videos.length;
+    if (n > 0) {
+      const { cols, rows } = computeGrid(n);
+      const cellW = canvasWidth / cols;
+      const cellH = canvasHeight / rows;
+      for (let i = 0; i < n; i++) {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const v = videos[i];
+        try {
+          if (v && v.readyState >= 2) {
+            ctx.drawImage(v, col * cellW, row * cellH, cellW, cellH);
+          }
+        } catch {
+          // ignore transient drawing errors
+        }
       }
-      if (remoteVideo.readyState >= 2) {
-        ctx.drawImage(remoteVideo, w, 0, w, h);
-      }
-    } catch {
-      // Drawing may throw if streams change; ignore for continuous rendering
     }
     requestAnimationFrame(draw);
   }
@@ -95,16 +99,17 @@ export function createMixedStreamForRecording(options: {
 
   let audioContext: AudioContext | null = null;
   let destination: MediaStreamAudioDestinationNode | null = null;
-  if (localAudioStream || remoteAudioStream) {
+  const validAudio = audioStreams.filter((s): s is MediaStream => !!s && s.getAudioTracks().length > 0);
+  if (validAudio.length > 0) {
     audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     destination = audioContext.createMediaStreamDestination();
-    if (localAudioStream) {
-      const localSource = audioContext.createMediaStreamSource(localAudioStream);
-      localSource.connect(destination);
-    }
-    if (remoteAudioStream) {
-      const remoteSource = audioContext.createMediaStreamSource(remoteAudioStream);
-      remoteSource.connect(destination);
+    for (const s of validAudio) {
+      try {
+        const src = audioContext.createMediaStreamSource(s);
+        src.connect(destination);
+      } catch {
+        // skip streams that can't be wired
+      }
     }
   }
 
@@ -124,5 +129,3 @@ export function createMixedStreamForRecording(options: {
 
   return { stream: mixed, stop };
 }
-
-

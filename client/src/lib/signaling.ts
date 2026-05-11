@@ -14,9 +14,9 @@ export type SignalingEvents = {
 export type SignalingClient = {
   socket: Socket;
   joinRoom: (roomId: string, displayName: string) => void;
-  sendOffer: (roomId: string, sdp: RTCSessionDescriptionInit) => void;
-  sendAnswer: (roomId: string, sdp: RTCSessionDescriptionInit) => void;
-  sendIceCandidate: (roomId: string, candidate: RTCIceCandidateInit) => void;
+  sendOffer: (to: string, sdp: RTCSessionDescriptionInit) => void;
+  sendAnswer: (to: string, sdp: RTCSessionDescriptionInit) => void;
+  sendIceCandidate: (to: string, candidate: RTCIceCandidateInit) => void;
   leaveRoom: (roomId: string) => void;
   close: () => void;
 };
@@ -41,14 +41,14 @@ export function createSignalingClient(serverUrl: string, handlers: Partial<Signa
     joinRoom: (roomId: string, displayName: string) => {
       socket.emit("join_room", { roomId, displayName });
     },
-    sendOffer: (roomId: string, sdp: RTCSessionDescriptionInit) => {
-      socket.emit("offer", { roomId, sdp });
+    sendOffer: (to: string, sdp: RTCSessionDescriptionInit) => {
+      socket.emit("offer", { to, sdp });
     },
-    sendAnswer: (roomId: string, sdp: RTCSessionDescriptionInit) => {
-      socket.emit("answer", { roomId, sdp });
+    sendAnswer: (to: string, sdp: RTCSessionDescriptionInit) => {
+      socket.emit("answer", { to, sdp });
     },
-    sendIceCandidate: (roomId: string, candidate: RTCIceCandidateInit) => {
-      socket.emit("ice_candidate", { roomId, candidate });
+    sendIceCandidate: (to: string, candidate: RTCIceCandidateInit) => {
+      socket.emit("ice_candidate", { to, candidate });
     },
     leaveRoom: (roomId: string) => {
       socket.emit("leave_room", { roomId });
@@ -58,5 +58,3 @@ export function createSignalingClient(serverUrl: string, handlers: Partial<Signa
     }
   };
 }
-
-
